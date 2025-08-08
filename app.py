@@ -1,13 +1,13 @@
 from flask import Flask, render_template, request, send_file
 from docxtpl import DocxTemplate
-import os
 from num2words import num2words
+import os
 
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return render_template('form.html')
+    return render_template("form.html")
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -20,20 +20,16 @@ def generate():
     rub_per_unit = float(f"{rub}.{kop:02d}")
     sum_total = round(qty * rub_per_unit, 2)
 
-    # Генерация суммы прописью (рубли и копейки отдельно)
-    rub_sum = int(sum_total)
-    kop_sum = int(round((sum_total - rub_sum) * 100))
+    # Генерация суммы прописью в ВЕРХНЕМ РЕГИСТРЕ
+    sum_total_words = num2words(sum_total, lang='ru').replace('целых', 'рублей').replace('сотых', 'копеек').upper()
 
-    rub_words = num2words(rub_sum, lang='ru')
-    kop_words = num2words(kop_sum, lang='ru')
-
-    sum_total_words = f"{rub_words} рублей {kop_words} копеек"
-
-    # Данные для шаблона
+    # Контекст для шаблона
     context = {
         "act_number": data['act_number'],
         "act_day": data['day'],
         "act_month": data['month'],
+        "contract_day": data['contract_day'],
+        "contract_month": data['contract_month'],
         "contract_number": data['contract_number'],
         "contractor_name": data['contractor_name'],
         "contractor_inn": data['contractor_inn'],
@@ -43,6 +39,7 @@ def generate():
         "sum_total_words": sum_total_words,
     }
 
+    # Генерация документа
     doc = DocxTemplate("TEMPLATE_ACT.docx")
     doc.render(context)
 
@@ -50,3 +47,4 @@ def generate():
     filepath = os.path.join("/tmp", filename)
     doc.save(filepath)
     return send_file(filepath, as_attachment=True)
+
