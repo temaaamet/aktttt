@@ -1,3 +1,4 @@
 flask
 docxtpl
 gunicorn
+num2words==0.5.13
