@@ -11,7 +11,7 @@ def index():
 @app.route('/generate', methods=['POST'])
 def generate():
     data = request.get_json()
-    doc = DocxTemplate("ШАБЛОН АКТ.docx")
+    doc = DocxTemplate("TEMPLATE_ACT.docx")
     doc.render(data)
     filename = f"Акт_№{data['act_number']}_от_{data['day']}_{data['month']}.docx"
     filepath = os.path.join("/tmp", filename)
