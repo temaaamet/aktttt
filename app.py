@@ -10,7 +10,7 @@ def index():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    data = request.get_json()
+    data = request.form
 
     # Расчёт суммы
     qty = int(data['qty'])
