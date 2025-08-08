@@ -1,6 +1,16 @@
+from flask import Flask, render_template, request, send_file
+from docxtpl import DocxTemplate
+import os
+
+app = Flask(__name__)  # <= ВАЖНО! app должен быть определён до использования
+
+@app.route('/')
+def index():
+    return render_template('form.html')
+
 @app.route('/generate', methods=['POST'])
 def generate():
-    data = request.form
+    data = request.get_json()
 
     qty = int(data['qty'])
     rub = int(data['rub'])
@@ -31,3 +41,4 @@ def generate():
     filepath = os.path.join("/tmp", filename)
     doc.save(filepath)
     return send_file(filepath, as_attachment=True)
+
