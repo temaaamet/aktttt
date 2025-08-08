@@ -1,29 +1,16 @@
-from flask import Flask, render_template, request, send_file
-from docxtpl import DocxTemplate
-import os
-
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return render_template('form.html')
-
 @app.route('/generate', methods=['POST'])
 def generate():
     data = request.form
 
-    # Расчёт суммы
     qty = int(data['qty'])
     rub = int(data['rub'])
     kop = int(data['kop'])
     rub_per_unit = float(f"{rub}.{kop:02d}")
     sum_total = round(qty * rub_per_unit, 2)
 
-    # Генерация суммы прописью
     from num2words import num2words
     sum_total_words = num2words(sum_total, lang='ru').replace('целых', 'рублей').replace('сотых', 'копеек')
 
-    # Полные данные для шаблона
     context = {
         "act_number": data['act_number'],
         "act_day": data['day'],
