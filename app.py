@@ -1,29 +1,52 @@
 from flask import Flask, render_template, request, send_file
 from docxtpl import DocxTemplate
 from num2words import num2words
-import os
+import io
 
 app = Flask(__name__)
 
-@app.route('/')
+def money_to_words(rub, kop):
+    rub = int(rub)
+    kop = int(kop)
+
+    def get_ruble_word(n):
+        if 11 <= n % 100 <= 14:
+            return "РУБЛЕЙ"
+        if n % 10 == 1:
+            return "РУБЛЬ"
+        if 2 <= n % 10 <= 4:
+            return "РУБЛЯ"
+        return "РУБЛЕЙ"
+
+    def get_kopeck_word(n):
+        if 11 <= n % 100 <= 14:
+            return "КОПЕЕК"
+        if n % 10 == 1:
+            return "КОПЕЙКА"
+        if 2 <= n % 10 <= 4:
+            return "КОПЕЙКИ"
+        return "КОПЕЕК"
+
+    rub_words = num2words(rub, lang='ru').upper()
+    kop_words = num2words(kop, lang='ru').upper()
+
+    return f"{rub_words} {get_ruble_word(rub)} {kop_words} {get_kopeck_word(kop)}"
+
+@app.route("/")
 def index():
     return render_template("form.html")
 
-@app.route('/generate', methods=['POST'])
+@app.route("/generate", methods=["POST"])
 def generate():
     data = request.get_json()
 
-    # Расчёт суммы
-    qty = int(data['qty'])
     rub = int(data['rub'])
     kop = int(data['kop'])
-    rub_per_unit = float(f"{rub}.{kop:02d}")
-    sum_total = round(qty * rub_per_unit, 2)
+    qty = int(data['qty'])
+    price = round(rub + kop / 100, 2)
 
-    # Генерация суммы прописью в ВЕРХНЕМ РЕГИСТРЕ
-    sum_total_words = num2words(sum_total, lang='ru').replace('целых', 'рублей').replace('сотых', 'копеек').upper()
+    contractor_name = ' '.join(word.capitalize() for word in data['contractor_name'].split())
 
-    # Контекст для шаблона
     context = {
         "act_number": data['act_number'],
         "act_day": data['day'],
@@ -31,20 +54,29 @@ def generate():
         "contract_day": data['contract_day'],
         "contract_month": data['contract_month'],
         "contract_number": data['contract_number'],
-        "contractor_name": data['contractor_name'],
+        "contractor_name": contractor_name,
         "contractor_inn": data['contractor_inn'],
         "qty": qty,
-        "rub_per_unit": rub_per_unit,
-        "sum_total": sum_total,
-        "sum_total_words": sum_total_words,
+        "rub": rub,
+        "kop": kop,
+        "price": price,
+        "sum_text": money_to_words(rub, kop)
     }
 
-    # Генерация документа
     doc = DocxTemplate("TEMPLATE_ACT.docx")
     doc.render(context)
 
-    filename = f"Акт_№{data['act_number']}_от_{data['day']}_{data['month']}.docx"
-    filepath = os.path.join("/tmp", filename)
-    doc.save(filepath)
-    return send_file(filepath, as_attachment=True)
+    byte_io = io.BytesIO()
+    doc.save(byte_io)
+    byte_io.seek(0)
+
+    return send_file(
+        byte_io,
+        as_attachment=True,
+        download_name="Акт.docx",
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+if __name__ == "__main__":
+    app.run(debug=True)
 
