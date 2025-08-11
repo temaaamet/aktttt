@@ -1,61 +1,104 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, jsonify
 from docxtpl import DocxTemplate
 from num2words import num2words
 import io
 
 app = Flask(__name__)
 
-@app.route('/')
+def money_to_words(rub: int, kop: int) -> str:
+    def r(n):
+        if 11 <= n % 100 <= 14: return "РУБЛЕЙ"
+        if n % 10 == 1: return "РУБЛЬ"
+        if 2 <= n % 10 <= 4: return "РУБЛЯ"
+        return "РУБЛЕЙ"
+    def k(n):
+        if 11 <= n % 100 <= 14: return "КОПЕЕК"
+        if n % 10 == 1: return "КОПЕЙКА"
+        if 2 <= n % 10 <= 4: return "КОПЕЙКИ"
+        return "КОПЕЕК"
+    rub = int(rub); kop = int(kop)
+    return f"{num2words(rub, lang='ru').upper()} {r(rub)} {num2words(kop, lang='ru').upper()} {k(kop)}"
+
+@app.route("/")
 def index():
-    return render_template('form.html')
+    return render_template("index.html")  # form.html лежит в папке templates/
 
-@app.route('/generate', methods=['POST'])
+@app.route("/generate", methods=["POST"])
 def generate():
-    data = request.get_json()
+    try:
+        d = request.get_json(force=True)
+    except Exception:
+        return jsonify({"error": "Некорректный JSON"}), 400
 
-    # Преобразуем ФИО исполнителя — каждое слово с заглавной буквы
-    contractor_name = " ".join(word.capitalize() for word in data['contractor_name'].split())
+    need = ["act_number","day","month",
+            "contract_number","contract_day","contract_month",
+            "contractor_name","contractor_inn",
+            "qty","rub","kop"]
+    miss = [k for k in need if k not in d or str(d[k]).strip() == ""]
+    if miss:
+        return jsonify({"error": "Отсутствуют поля: " + ", ".join(miss)}), 400
 
-    # Сумма
-    rub = int(data['rub'])
-    kop = int(data['kop'])
-    qty = int(data['qty'])
-    total = rub * qty + (kop * qty) / 100
+    try:
+        act_number = str(d["act_number"]).strip()
+        act_day    = str(int(d["day"]))
+        act_month  = str(d["month"])
+        c_number   = str(d["contract_number"]).strip()
+        c_day      = str(int(d["contract_day"]))
+        c_month    = str(d["contract_month"])
+        name_raw   = str(d["contractor_name"]).strip()
+        inn        = str(d["contractor_inn"]).strip()
+        qty        = int(d["qty"])
+        rub        = int(d["rub"])
+        kop        = int(d["kop"])
+    except Exception as e:
+        return jsonify({"error": f"Неверные типы полей: {e}"}), 400
 
-    # Прописью (все заглавные)
-    total_words = num2words(total, lang='ru', to='currency').upper()
+    if not inn.isdigit() or len(inn) != 12:
+        return jsonify({"error": "ИНН: ровно 12 цифр"}), 400
+    if qty <= 0 or rub < 0 or not (0 <= kop <= 99):
+        return jsonify({"error": "Проверьте qty (>0), rub (>=0), kop (0–99)"}), 400
 
-    # Загружаем шаблон
-    doc = DocxTemplate("TEMPLATE_ACT.docx")
+    contractor_name = " ".join(w[:1].upper() + w[1:].lower() for w in name_raw.split())
 
+    # Цена за единицу и итог
+    price = rub + kop / 100.0
+    total = qty * price
+    total_kop_all = int(round(total * 100))
+    total_rub = total_kop_all // 100
+    total_kop = total_kop_all % 100
+
+    # === Контекст ПОД ТВОИ ПЛЕЙСХОЛДЕРЫ ===
     context = {
-        'act_number': data['act_number'],
-        'act_day': data['act_day'],
-        'act_month': data['act_month'],
-        'contract_day': data['contract_day'],
-        'contract_month': data['contract_month'],
-        'contract_number': data['contract_number'],
-        'contractor_name': contractor_name,
-        'contractor_inn': data['contractor_inn'],
-        'qty': qty,
-        'rub': rub,
-        'kop': f"{kop:02}",
-        'total': f"{total:.2f}",
-        'total_words': total_words
+        "act_number": act_number,
+        "act_day": act_day,
+        "act_month": act_month,
+
+        "contract_number": c_number,
+        "contract_day": c_day,
+        "contract_month": c_month,
+
+        "contractor_name": contractor_name,
+        "contractor_inn": inn,
+
+        "qty": qty,
+        # то, что ждёт таблица
+        "rub_per_unit": f"{price:.2f}",                # цена за 1 (без «руб.»)
+        "sum_total": f"{total_rub}.{total_kop:02d}",   # итог (без «руб.»)
+        "sum_total_words": money_to_words(total_rub, total_kop),  # итог прописью
     }
 
+    try:
+        doc = DocxTemplate("TEMPLATE_ACT.docx")
+    except Exception as e:
+        return jsonify({"error": f"Нет TEMPLATE_ACT.docx рядом с app.py: {e}"}), 500
+
     doc.render(context)
+    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
 
-    buffer = io.BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
+    filename = f"Акт_№{act_number}_от_{act_day}_{act_month}.docx"
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
-    return send_file(
-        buffer,
-        as_attachment=True,
-        download_name="Акт.docx",
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+if __name__ == "__main__":
+    app.run(debug=True)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)

@@ -1,63 +1,127 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Генерация акта</title>
+    <meta charset="UTF-8">
+    <title>Генерация акта</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 40px auto;
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px #ccc;
+        }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input, select, button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            font-size: 14px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            margin-top: 20px;
+            background: #007BFF;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+    </style>
 </head>
 <body>
-  <form id="actForm">
-    <!-- элементы формы (упрощено) -->
-    <input type="text" id="fio" placeholder="ФИО" />
-    <input type="text" id="inn" placeholder="ИНН" />
-    <input type="text" id="contract_number" placeholder="Номер договора" />
-    <input type="number" id="act_number" placeholder="Номер акта" />
-    <input type="text" id="day" placeholder="День" />
-    <input type="text" id="month" placeholder="Месяц" />
-    <input type="number" id="qty" placeholder="Количество" />
-    <input type="number" id="rub" placeholder="Цена (руб)" />
-    <input type="number" id="kop" placeholder="Цена (коп)" />
-    <button type="submit">Сгенерировать</button>
-  </form>
 
-  <script>
-    document.getElementById("actForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const fio = document.getElementById("fio").value;
-      const inn = document.getElementById("inn").value;
-      const contract_number = document.getElementById("contract_number").value;
-      const act_number = document.getElementById("act_number").value;
-      const day = document.getElementById("day").value;
-      const month = document.getElementById("month").value;
-      const qty = parseInt(document.getElementById("qty").value);
-      const rub = parseInt(document.getElementById("rub").value);
-      const kop = parseInt(document.getElementById("kop").value);
-      const total = qty * (rub + kop / 100);
-      const sum_words = "TEMP"; // Здесь нужно заменить на функцию генерации прописью
+<h2>Форма генерации акта</h2>
 
-      const response = await fetch("/generate", {
+<form id="actForm">
+    <label>Номер акта</label>
+    <input type="text" name="act_number" required pattern="\d+">
+
+    <label>День акта</label>
+    <select name="day" required>
+        {% for d in range(1, 32) %}
+        <option value="{{ d }}">{{ d }}</option>
+        {% endfor %}
+    </select>
+
+    <label>Месяц акта</label>
+    <select name="month" required>
+        <option>января</option><option>февраля</option><option>марта</option>
+        <option>апреля</option><option>мая</option><option>июня</option>
+        <option>июля</option><option>августа</option><option>сентября</option>
+        <option>октября</option><option>ноября</option><option>декабря</option>
+    </select>
+
+    <label>День заключения договора</label>
+    <select name="contract_day" required>
+        {% for d in range(1, 32) %}
+        <option value="{{ d }}">{{ d }}</option>
+        {% endfor %}
+    </select>
+
+    <label>Месяц заключения договора</label>
+    <select name="contract_month" required>
+        <option>января</option><option>февраля</option><option>марта</option>
+        <option>апреля</option><option>мая</option><option>июня</option>
+        <option>июля</option><option>августа</option><option>сентября</option>
+        <option>октября</option><option>ноября</option><option>декабря</option>
+    </select>
+
+    <label>Номер договора</label>
+    <input type="text" name="contract_number" required>
+
+    <label>ФИО исполнителя</label>
+    <input type="text" name="contractor_name" required pattern="[А-Яа-яЁё\s\-]+" title="Только буквы и пробелы">
+
+    <label>ИНН исполнителя</label>
+    <input type="text" name="contractor_inn" required pattern="\d{12}" maxlength="12" title="Ровно 12 цифр">
+
+    <label>Количество</label>
+    <input type="number" name="qty" min="1" required>
+
+    <label>Цена — рублей</label>
+    <input type="number" name="rub" min="0" required>
+
+    <label>Цена — копеек</label>
+    <input type="number" name="kop" min="0" max="99" required>
+
+    <button type="submit">Сформировать акт</button>
+</form>
+
+<script>
+document.getElementById("actForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const fd = new FormData(e.target);
+    const data = {};
+    fd.forEach((v, k) => data[k] = v);
+
+    const resp = await fetch("/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          day, month,
-          act_number,
-          contractor_name: fio,
-          contractor_inn: inn,
-          contract_number,
-          qty, rub, kop,
-          sum_total: total.toFixed(2),
-          sum_total_words: sum_words
-        })
-      });
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "акт.docx";
-      a.click();
-      window.URL.revokeObjectURL(url);
+        body: JSON.stringify(data)
     });
-  </script>
+
+    if (!resp.ok) {
+        const err = await resp.json().catch(()=>({error:"Ошибка"}));
+        alert(err.error || "Ошибка при генерации акта");
+        return;
+    }
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Акт_№${data.act_number}_от_${data.day}_${data.month}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+});
+</script>
+
 </body>
 </html>
