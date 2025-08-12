@@ -21,9 +21,10 @@ def money_to_words(rub: int, kop: int) -> str:
 
 @app.route("/")
 def index():
-    return render_template("index.html")  # form.html лежит в папке templates/
+    return render_template("index.html")  # index.html должен лежать в templates/
 
-@app.route("/generate", methods=["POST"])
+@app.route("/generate", methods=["POST"]
+)
 def generate():
     try:
         d = request.get_json(force=True)
@@ -33,7 +34,7 @@ def generate():
     need = ["act_number","day","month",
             "contract_number","contract_day","contract_month",
             "contractor_name","contractor_inn",
-            "qty","rub","kop"]
+            "rub","kop"]
     miss = [k for k in need if k not in d or str(d[k]).strip() == ""]
     if miss:
         return jsonify({"error": "Отсутствуют поля: " + ", ".join(miss)}), 400
@@ -47,7 +48,6 @@ def generate():
         c_month    = str(d["contract_month"])
         name_raw   = str(d["contractor_name"]).strip()
         inn        = str(d["contractor_inn"]).strip()
-        qty        = int(d["qty"])
         rub        = int(d["rub"])
         kop        = int(d["kop"])
     except Exception as e:
@@ -55,19 +55,17 @@ def generate():
 
     if not inn.isdigit() or len(inn) != 12:
         return jsonify({"error": "ИНН: ровно 12 цифр"}), 400
-    if qty <= 0 or rub < 0 or not (0 <= kop <= 99):
-        return jsonify({"error": "Проверьте qty (>0), rub (>=0), kop (0–99)"}), 400
+    if rub < 0 or not (0 <= kop <= 99):
+        return jsonify({"error": "Проверьте rub (>=0) и kop (0–99)"}), 400
 
     contractor_name = " ".join(w[:1].upper() + w[1:].lower() for w in name_raw.split())
 
-    # Цена за единицу и итог
+    # Цена = итог (количество фиксировано 1)
     price = rub + kop / 100.0
-    total = qty * price
-    total_kop_all = int(round(total * 100))
+    total_kop_all = int(round(price * 100))
     total_rub = total_kop_all // 100
     total_kop = total_kop_all % 100
 
-    # === Контекст ПОД ТВОИ ПЛЕЙСХОЛДЕРЫ ===
     context = {
         "act_number": act_number,
         "act_day": act_day,
@@ -80,11 +78,10 @@ def generate():
         "contractor_name": contractor_name,
         "contractor_inn": inn,
 
-        "qty": qty,
-        # то, что ждёт таблица
-        "rub_per_unit": f"{price:.2f}",                # цена за 1 (без «руб.»)
-        "sum_total": f"{total_rub}.{total_kop:02d}",   # итог (без «руб.»)
-        "sum_total_words": money_to_words(total_rub, total_kop),  # итог прописью
+        # Плейсхолдеры из DOCX
+        "rub_per_unit": f"{rub}.{kop:02d}",                 # цена за 1 (и она же единственная)
+        "sum_total": f"{total_rub}.{total_kop:02d}",        # итог = цена
+        "sum_total_words": money_to_words(total_rub, total_kop),
     }
 
     try:
@@ -101,4 +98,3 @@ def generate():
 
 if __name__ == "__main__":
     app.run(debug=True)
-

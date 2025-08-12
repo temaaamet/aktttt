@@ -4,37 +4,16 @@
     <meta charset="UTF-8">
     <title>Генерация акта</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 700px;
-            margin: 40px auto;
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px #ccc;
-        }
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px #ccc; }
         label { display: block; margin-top: 15px; font-weight: bold; }
-        input, select, button {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            font-size: 14px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
-        button {
-            margin-top: 20px;
-            background: #007BFF;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
+        input, select, button { width: 100%; padding: 8px; margin-top: 5px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
+        button { margin-top: 20px; background: #007BFF; color: white; font-weight: bold; cursor: pointer; }
         button:hover { background: #0056b3; }
     </style>
 </head>
 <body>
 
-<h2>Форма генерации акта</h2>
+<h2>Форма генерации акта (без количества)</h2>
 
 <form id="actForm">
     <label>Номер акта</label>
@@ -78,9 +57,6 @@
 
     <label>ИНН исполнителя</label>
     <input type="text" name="contractor_inn" required pattern="\d{12}" maxlength="12" title="Ровно 12 цифр">
-
-    <label>Количество</label>
-    <input type="number" name="qty" min="1" required>
 
     <label>Цена — рублей</label>
     <input type="number" name="rub" min="0" required>
