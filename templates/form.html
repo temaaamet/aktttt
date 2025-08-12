@@ -2,94 +2,47 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Генерация акта</title>
+    <title>Форма генерации акта</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 700px;
-            margin: 40px auto;
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px #ccc;
-        }
-        label {
-            display: block;
-            margin-top: 15px;
-            font-weight: bold;
-        }
-        input, select, button {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            font-size: 14px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
-        button {
-            margin-top: 20px;
-            background: #007BFF;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #0056b3;
-        }
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px #ccc; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input, select, button { width: 100%; padding: 8px; margin-top: 5px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
+        button { margin-top: 20px; background: #007BFF; color: white; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0056b3; }
     </style>
 </head>
 <body>
 
 <h2>Форма генерации акта</h2>
 
-<form id="actForm">
+<form id="actForm" enctype="multipart/form-data" method="post" action="/generate">
     <label>Номер акта</label>
     <input type="text" name="act_number" required pattern="\d+">
 
-    <label>Дата акта – день</label>
+    <label>День написания акта</label>
     <select name="day" required>
-        {% for d in range(1, 32) %}
-        <option value="{{ d }}">{{ d }}</option>
-        {% endfor %}
+        {% for d in range(1, 32) %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
     </select>
 
-    <label>Дата акта – месяц</label>
+    <label>Месяц написания акта</label>
     <select name="month" required>
-        <option>января</option>
-        <option>февраля</option>
-        <option>марта</option>
-        <option>апреля</option>
-        <option>мая</option>
-        <option>июня</option>
-        <option>июля</option>
-        <option>августа</option>
-        <option>сентября</option>
-        <option>октября</option>
-        <option>ноября</option>
-        <option>декабря</option>
+        <option>января</option><option>февраля</option><option>марта</option>
+        <option>апреля</option><option>мая</option><option>июня</option>
+        <option>июля</option><option>августа</option><option>сентября</option>
+        <option>октября</option><option>ноября</option><option>декабря</option>
     </select>
 
     <label>Число заключения договора</label>
     <select name="contract_day" required>
-        {% for d in range(1, 32) %}
-        <option value="{{ d }}">{{ d }}</option>
-        {% endfor %}
+        {% for d in range(1, 32) %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
     </select>
 
     <label>Месяц заключения договора</label>
     <select name="contract_month" required>
-        <option>января</option>
-        <option>февраля</option>
-        <option>марта</option>
-        <option>апреля</option>
-        <option>мая</option>
-        <option>июня</option>
-        <option>июля</option>
-        <option>августа</option>
-        <option>сентября</option>
-        <option>октября</option>
-        <option>ноября</option>
-        <option>декабря</option>
+        <option>января</option><option>февраля</option><option>марта</option>
+        <option>апреля</option><option>мая</option><option>июня</option>
+        <option>июля</option><option>августа</option><option>сентября</option>
+        <option>октября</option><option>ноября</option><option>декабря</option>
     </select>
 
     <label>Номер договора</label>
@@ -101,49 +54,20 @@
     <label>ИНН исполнителя</label>
     <input type="text" name="contractor_inn" required pattern="\d{12}" maxlength="12" title="Ровно 12 цифр">
 
-    <label>Количество услуг</label>
+    <label>Количество машин</label>
     <input type="number" name="qty" min="1" required>
 
-    <label>Цена — рублей</label>
+    <label>Выручка — рублей</label>
     <input type="number" name="rub" min="0" required>
 
-    <label>Цена — копеек</label>
+    <label>Выручка — копеек</label>
     <input type="number" name="kop" min="0" max="99" required>
+
+    <label>Подпись (.png)</label>
+    <input type="file" name="signature" accept="image/png">
 
     <button type="submit">Сформировать акт</button>
 </form>
-
-<script>
-document.getElementById("actForm").addEventListener("submit", async function(e) {
-    e.preventDefault();
-
-    const formData = new FormData(e.target);
-    const jsonData = {};
-    formData.forEach((value, key) => jsonData[key] = value);
-
-    const resp = await fetch("/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(jsonData)
-    });
-
-    if (!resp.ok) {
-        const err = await resp.json().catch(()=>({error:"Ошибка"}));
-        alert(err.error || "Ошибка при генерации акта");
-        return;
-    }
-
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Акт_№${jsonData.act_number}_от_${jsonData.day}_${jsonData.month}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-});
-</script>
 
 </body>
 </html>
