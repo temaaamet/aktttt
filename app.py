@@ -21,7 +21,7 @@ def money_to_words(rub: int, kop: int) -> str:
 
 @app.route("/")
 def index():
-    return render_template("index.html")  # index.html должен лежать в templates/
+    return render_template("index.html")  # index.html в templates/
 
 @app.route("/generate", methods=["POST"]
 )
@@ -34,7 +34,7 @@ def generate():
     need = ["act_number","day","month",
             "contract_number","contract_day","contract_month",
             "contractor_name","contractor_inn",
-            "rub","kop"]
+            "qty","rub","kop"]
     miss = [k for k in need if k not in d or str(d[k]).strip() == ""]
     if miss:
         return jsonify({"error": "Отсутствуют поля: " + ", ".join(miss)}), 400
@@ -48,23 +48,32 @@ def generate():
         c_month    = str(d["contract_month"])
         name_raw   = str(d["contractor_name"]).strip()
         inn        = str(d["contractor_inn"]).strip()
-        rub        = int(d["rub"])
-        kop        = int(d["kop"])
+        qty        = int(d["qty"])                     # количество машин
+        total_rub_input = int(d["rub"])               # выручка за месяц (руб)
+        total_kop_input = int(d["kop"])               # выручка за месяц (коп)
     except Exception as e:
         return jsonify({"error": f"Неверные типы полей: {e}"}), 400
 
     if not inn.isdigit() or len(inn) != 12:
         return jsonify({"error": "ИНН: ровно 12 цифр"}), 400
-    if rub < 0 or not (0 <= kop <= 99):
-        return jsonify({"error": "Проверьте rub (>=0) и kop (0–99)"}), 400
+    if qty <= 0:
+        return jsonify({"error": "Количество должно быть > 0"}), 400
+    if total_rub_input < 0 or not (0 <= total_kop_input <= 99):
+        return jsonify({"error": "Выручка: rub >= 0, kop 0–99"}), 400
 
     contractor_name = " ".join(w[:1].upper() + w[1:].lower() for w in name_raw.split())
 
-    # Цена = итог (количество фиксировано 1)
-    price = rub + kop / 100.0
-    total_kop_all = int(round(price * 100))
-    total_rub = total_kop_all // 100
-    total_kop = total_kop_all % 100
+    # Общая выручка (в копейках)
+    total_cents = total_rub_input * 100 + total_kop_input
+
+    # Цена за 1 машину = выручка / qty (округляем до копеек)
+    unit_cents = round(total_cents / qty)
+    unit_rub = unit_cents // 100
+    unit_kop = unit_cents % 100
+
+    # Итог для документа = та же общая выручка
+    total_rub = total_cents // 100
+    total_kop = total_cents % 100
 
     context = {
         "act_number": act_number,
@@ -78,9 +87,9 @@ def generate():
         "contractor_name": contractor_name,
         "contractor_inn": inn,
 
-        # Плейсхолдеры из DOCX
-        "rub_per_unit": f"{rub}.{kop:02d}",                 # цена за 1 (и она же единственная)
-        "sum_total": f"{total_rub}.{total_kop:02d}",        # итог = цена
+        "qty": qty,
+        "rub_per_unit": f"{unit_rub}.{unit_kop:02d}",     # цена оклейки одной машины
+        "sum_total":   f"{total_rub}.{total_kop:02d}",    # выручка за месяц (итог)
         "sum_total_words": money_to_words(total_rub, total_kop),
     }
 
