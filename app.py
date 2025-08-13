@@ -1,95 +1,41 @@
-from flask import Flask, render_template, request, send_file, jsonify
-from docxtpl import DocxTemplate, InlineImage
-from docx.shared import Mm
-from num2words import num2words
+from flask import Flask, render_template, request, send_file
+from docxtpl import DocxTemplate
 import io
-import os
 
 app = Flask(__name__)
 
-def money_to_words_caps(rub: int, kop: int) -> str:
-    # Слова для рублей
-    def r(n):
-        if 11 <= n % 100 <= 14: return "РУБЛЕЙ"
-        if n % 10 == 1: return "РУБЛЬ"
-        if 2 <= n % 10 <= 4: return "РУБЛЯ"
-        return "РУБЛЕЙ"
-    # Слова для копеек
-    def k(n):
-        if 11 <= n % 100 <= 14: return "КОПЕЕК"
-        if n % 10 == 1: return "КОПЕЙКА"
-        if 2 <= n % 10 <= 4: return "КОПЕЙКИ"
-        return "КОПЕЕК"
-
-    # Женский род для последних слов числительного копеек (одна/две), кроме 11–14
-    def num_words_caps_fem(n: int) -> str:
-        s = num2words(int(n), lang='ru')
-        parts = s.strip().split()
-        if parts and not (11 <= n % 100 <= 14):
-            if parts[-1] == "один":
-                parts[-1] = "одна"
-            elif parts[-1] == "два":
-                parts[-1] = "две"
-        return " ".join(parts).upper()
-
-    rub = int(rub); kop = int(kop)
-    rub_words = num2words(rub, lang='ru').upper()
-    kop_words = num_words_caps_fem(kop)
-    return f"{rub_words} {r(rub)} {kop_words} {k(kop)}"
-
-@app.route("/")
+@app.route('/')
 def index():
-    return render_template("form.html")  # form.html должен лежать в templates/
+    return render_template('form.html')
 
-@app.route("/generate", methods=["POST"])
+@app.route('/generate', methods=['POST'])
 def generate():
-    try:
-        act_number = request.form["act_number"].strip()
-        act_day = str(int(request.form["day"]))
-        act_month = request.form["month"].strip()
-        contract_day = str(int(request.form["contract_day"]))
-        contract_month = request.form["contract_month"].strip()
-        contract_number = request.form["contract_number"].strip()
-        contractor_name = " ".join(w[:1].upper() + w[1:].lower() for w in request.form["contractor_name"].split())
-        contractor_inn = request.form["contractor_inn"].strip()
-        qty = int(request.form["qty"])
-        total_rub_input = int(request.form["rub"])   # выручка (руб)
-        total_kop_input = int(request.form["kop"])   # выручка (коп)
-    except Exception as e:
-        return jsonify({"error": f"Неверные данные формы: {e}"}), 400
+    data = request.get_json()
 
-    if not contractor_inn.isdigit() or len(contractor_inn) != 12:
-        return jsonify({"error": "ИНН должен содержать ровно 12 цифр"}), 400
-    if qty <= 0:
-        return jsonify({"error": "Количество машин должно быть больше 0"}), 400
-    if total_rub_input < 0 or not (0 <= total_kop_input <= 99):
-        return jsonify({"error": "Выручка: руб ≥ 0, коп 0–99"}), 400
+    # Inputs
+    act_number = data['act_number']
+    act_day = data.get('day')          # from form: "Число создания акта"
+    act_month = data.get('month')      # from form: "Месяц создания акта"
+    contract_day = data['contract_day']
+    contract_month = data['contract_month']
+    contract_number = data['contract_number']
 
-    # Общая выручка в копейках
-    total_cents = total_rub_input * 100 + total_kop_input
+    # FIO -> Title Case (каждое слово с заглавной)
+    contractor_name = " ".join(w.capitalize() for w in data['contractor_name'].split())
+    contractor_inn = data['contractor_inn']
 
-    # Цена за 1 машину (в копейках) = выручка / qty, округляем до копейки
-    unit_cents = round(total_cents / qty)
-    unit_rub = unit_cents // 100
-    unit_kop = unit_cents % 100
+    # Pricing
+    qty = int(data['qty'])
+    rub = int(data['rub'])
+    kop = int(data['kop'])
+    price_float = rub + kop / 100
+    total = round(qty * price_float, 2)
 
-    # Итог для документа — введённая выручка
-    total_rub = total_cents // 100
-    total_kop = total_cents % 100
-
-    # Готовим шаблон
-    try:
-        doc = DocxTemplate("TEMPLATE_ACT.docx")
-    except Exception as e:
-        return jsonify({"error": f"Не найден TEMPLATE_ACT.docx рядом с app.py: {e}"}), 500
-
-    # Подпись (необязательно)
-    signature_img = ""
-    file = request.files.get("signature")
-    if file and file.filename:
-        tmp_path = os.path.join("/tmp", file.filename)
-        file.save(tmp_path)
-        signature_img = InlineImage(doc, tmp_path, width=Mm(40))  # подстрой ширину по вкусу
+    # Форматы для шаблона
+    rub_per_unit = f"{rub}.{kop:02d}"            # например '120.50'
+    total_str = f"{total:.2f}"                   # например '241.00'
+    # По требованию: не склонять, а выводить цифрами с сокращениями
+    total_words_caps = f"{int(total):d} РУБ. {int(round((total - int(total)) * 100)):02d} КОП."
 
     context = {
         "act_number": act_number,
@@ -101,24 +47,25 @@ def generate():
         "contractor_name": contractor_name,
         "contractor_inn": contractor_inn,
         "qty": qty,
-        "rub_per_unit": f"{unit_rub}.{unit_kop:02d}",        # цена одной машины
-        "sum_total":   f"{total_rub}.{total_kop:02d}",       # выручка за месяц
-        "sum_total_words": money_to_words_caps(total_rub, total_kop),
-        "signature": signature_img,                          # {{ signature }} в шаблоне где нужно
+        "rub_per_unit": rub_per_unit,
+        "sum_total": total_str,
+        "sum_total_words": total_words_caps
     }
 
+    doc = DocxTemplate("TEMPLATE_ACT.docx")
     doc.render(context)
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
 
-    filename = f"Акт_№{act_number}_от_{act_day}_{act_month}.docx"
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    download_name = f"Акт_№{act_number}_от_{act_day}_{act_month}.docx"
     return send_file(
-        buf,
+        buffer,
         as_attachment=True,
-        download_name=filename,
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        download_name=download_name,
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-if __name__ == "__main__":
-    app.run(debug=True)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
